@@ -1,7 +1,7 @@
 HDP Manual Install Scripts
 ==========================
 
-This is to demostrate how to install the hadoop eco-system on EC2.
+This is to demostrate how to manually install HDP 2.2 on Vagrant.
 
 Pre-requisites
 --------------
