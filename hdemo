@@ -1,0 +1,515 @@
+#!/bin/bash
+
+umask 0022
+
+DEMO_HOME=`dirname $0`
+DEMO_HOME=`cd $DEMO_HOME; pwd`
+
+source $DEMO_HOME/functions.sh
+
+usage_exit() {
+        echo "Usage: $0 [-c command] [-s subcommand] [-e command]"
+        echo
+        echo "-c command [-s subcommand]: run command on specific nodes"
+        echo "Supported commands"
+        echo
+        echo "  start-master-instances: start EC2 instances for hadoop masters"
+        echo "  start-slave-instances: start EC2 instances for hadoop slaves"
+        echo "  start-metastore: start RDS instance for HCatalog/Hive metastore"
+        echo "  start-client: start client instance"
+        echo "  check-reachability: check reachability for all nodes"
+        echo "  pre-setup: prepare for hadoop setup, runs on all nodes"
+        echo
+        echo "  setup-masters: set up hadoop masters"
+        echo "  setup-slaves: set up hadoop slaves"
+        echo "  setup-metastore: set up metastore for HCatalog/Hive metastore"
+        echo "  setup-client: set up client instance"
+        echo "  setup-yarn: set up YARN"
+        echo "  setup-jobhistory: set up YARN job history server"
+        echo "  setup-hive: set up Hive and HCatalog"
+        echo "  setup-tez: set up Tez"
+        echo "  setup-zookeeper: set up Zookeeper"
+        echo "  setup-storm-master: set up Storm master"
+        echo "  setup-storm-worker: set up Storm worker"
+        echo
+        echo "  namenode: format / start / stop namenode"
+        echo "  datanode: start / stop datanode"
+        echo "  yarn-rm: start / stop YARN resource manager"
+        echo "  yarn-nm: start / stop YARN node manager"
+        echo "  jobhistory: start / stop YARN job history"
+        echo "  hive-server: start / stop Hive server2"
+        echo "  zookeeper: start / stop Zookeeper"
+        echo "  storm-master: start / stop Storm master"
+        echo "  storm-worker: start / stop Storm worker"
+        echo
+        echo "  tweets: Hive example to copy / create / load / query tweets table"
+        echo "  hellostorm: a simple Strom demo, supported subcommands: package / run"
+        echo
+        echo "-e command: run adhoc command on all nodes"
+        echo
+        exit 1
+}
+
+while getopts c:s:e:h OPT
+do
+    case $OPT in
+        c)  CMD=$OPTARG
+            ;;
+        s)  SUBCMD=$OPTARG
+            ;;
+        e)  RUN_ON_ALL_NODES=1 && CMD=$OPTARG
+            ;;
+        h)  usage_exit
+            ;;
+        *) usage_exit
+            ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+if [[ "x$CMD" == "x" ]]; then
+    usage_exit
+fi
+
+# functions
+function check-reachability() {
+    for NODE in `cat $DEMO_HOME/conf/cluster/all_nodes`
+    do
+        ssh -o StrictHostKeyChecking=no $NODE "exit" && echo "$NODE    OK"
+        sleep 1
+    done
+}
+
+function pre-setup() {
+    # Download HDP helper
+    if [[ ! -f $DEMO_HOME/hdp_helper ]]; then
+        wget http://public-repo-1.hortonworks.com/HDP/tools/2.2.0.0/hdp_manual_install_rpm_helper_files-2.2.0.0.2041.tar.gz
+        tar xfvz hdp_manual_install_rpm_helper_files-2.2.0.0.2041.tar.gz
+        mv hdp_manual_install_rpm_helper_files-2.2.0.0.2041 hdp_helper
+        rm hdp_manual_install_rpm_helper_files-2.2.0.0.2041.tar.gz
+    fi
+
+    # Configure HDP
+    ESCAPED_LIST_OF_NAMENODE_DIRS=`escape_path "$LIST_OF_NAMENODE_DIRS"`
+    sed -i "s/TODO-LIST-OF-NAMENODE-DIRS/$ESCAPED_LIST_OF_NAMENODE_DIRS/g" $DEMO_HOME/hdp_helper/scripts/directories.sh
+
+    ESCAPED_LIST_OF_DATA_DIRS=`escape_path "$LIST_OF_DATA_DIRS"`
+    sed -i "s/TODO-LIST-OF-DATA-DIRS/$ESCAPED_LIST_OF_DATA_DIRS/g" $DEMO_HOME/hdp_helper/scripts/directories.sh
+
+    ESCAPED_LIST_OF_YARN_LOCAL_DIRS=`escape_path "$LIST_OF_YARN_LOCAL_DIRS"`
+    sed -i "s/TODO-LIST-OF-YARN-LOCAL-DIRS/$ESCAPED_LIST_OF_YARN_LOCAL_DIRS/g" $DEMO_HOME/hdp_helper/scripts/directories.sh
+
+    ESCAPED_LIST_OF_YARN_LOCAL_LOG_DIRS=`escape_path "$LIST_OF_YARN_LOCAL_LOG_DIRS"`
+    sed -i "s/TODO-LIST-OF-YARN-LOCAL-LOG-DIRS/$ESCAPED_LIST_OF_YARN_LOCAL_LOG_DIRS/g" $DEMO_HOME/hdp_helper/scripts/directories.sh
+
+    ESCAPED_ZOOKEEPER_DATA_DIR=`escape_path "$ZOOKEEPER_DATA_DIR"`
+    sed -i "s/TODO-ZOOKEEPER-DATA-DIR/$ESCAPED_ZOOKEEPER_DATA_DIR/g" $DEMO_HOME/hdp_helper/scripts/directories.sh
+
+    # Distribute setup bundle
+    for NODE in `cat $DEMO_HOME/conf/cluster/all_nodes`
+    do
+        rsync -vzr --delete $DEMO_HOME/ $NODE:$DEMO_HOME/
+    done
+}
+
+function start-master-instances() {
+    $DEMO_HOME/start-master-instances.sh
+}
+
+function start-slave-instances() {
+    $DEMO_HOME/start-slave-instances.sh
+}
+
+function start-metastore() {
+    $DEMO_HOME/start-metastore.sh
+}
+
+function start-client() {
+    $DEMO_HOME/start-client.sh
+}
+
+function setup-masters() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "sudo $DEMO_HOME/setup-masters.sh"
+}
+
+function setup-slaves() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/slaves "sudo $DEMO_HOME/setup-slaves.sh"
+}
+
+function setup-metastore() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/metastore "sudo $DEMO_HOME/setup-metastore.sh"
+}
+
+function setup-client() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/client "sudo $DEMO_HOME/setup-client.sh"
+}
+
+function setup-yarn() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "sudo $DEMO_HOME/setup-yarn.sh"
+}
+
+function setup-jobhistory() {
+    echo "Changing permissions on the container-executor files"
+    EXEC="sudo chown -R root:hadoop /usr/hdp/current/hadoop-yarn/bin/container-executor && sudo chmod -R 650 /usr/hdp/current/hadoop-yarn/bin/container-executor"
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/slaves "$EXEC"
+
+    echo "Set up directories on HDFS"
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "sudo $DEMO_HOME/setup-jobhistory.sh"
+}
+
+function setup-hive() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "sudo $DEMO_HOME/setup-hive.sh"
+}
+
+function setup-tez() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "sudo $DEMO_HOME/setup-tez.sh"
+}
+
+function setup-zookeeper() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "sudo $DEMO_HOME/setup-zookeeper.sh"
+}
+
+function setup-storm-master() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "sudo $DEMO_HOME/setup-storm.sh master"
+}
+
+function setup-storm-worker() {
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/slaves "sudo $DEMO_HOME/setup-storm.sh worker"
+}
+
+function jobhistory() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        start )
+            EXEC="sudo -u $YARN_USER /usr/hdp/current/hadoop-mapreduce-historyserver/sbin/mr-jobhistory-daemon.sh --config $HADOOP_CONF_DIR start historyserver"
+            ;;
+        stop )
+            EXEC="sudo -u $YARN_USER /usr/hdp/current/hadoop-mapreduce-historyserver/sbin/mr-jobhistory-daemon.sh --config $HADOOP_CONF_DIR stop historyserver"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "$EXEC"
+}
+
+function run_cmd_on_all_nodes() {
+    if [[ $RUN_ON_ALL_NODES != 1 ]]; then
+        usage_exit
+    fi
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/all_nodes "$CMD"
+}
+
+function namenode() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        format )
+            # bug on http://docs.hortonworks.com/HDPDocuments/HDP2/HDP-2.2.0/HDP_Man_Install_v22/index.html#Item1.5
+            # hadoop-daemon.sh only support (start | stop) subcommand
+            # EXEC="sudo -u $HDFS_USER /usr/hdp/current/hadoop-hdfs-namenode/../hadoop/sbin/hadoop-daemon.sh namenode -format"
+            EXEC="sudo -u $HDFS_USER hdfs namenode -format"
+            ;;
+        start )
+            EXEC="sudo -u $HDFS_USER /usr/hdp/current/hadoop-hdfs-namenode/../hadoop/sbin/hadoop-daemon.sh --config $HADOOP_CONF_DIR start namenode"
+            ;;
+        stop )
+            EXEC="sudo -u $HDFS_USER /usr/hdp/current/hadoop-hdfs-namenode/../hadoop/sbin/hadoop-daemon.sh --config $HADOOP_CONF_DIR stop namenode"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "$EXEC"
+}
+
+function datanode() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        start )
+            EXEC="sudo -u $HDFS_USER /usr/hdp/current/hadoop-hdfs-datanode/../hadoop/sbin/hadoop-daemon.sh --config $HADOOP_CONF_DIR start datanode"
+            ;;
+        stop )
+            EXEC="sudo -u $HDFS_USER /usr/hdp/current/hadoop-hdfs-datanode/../hadoop/sbin/hadoop-daemon.sh --config $HADOOP_CONF_DIR stop datanode"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/slaves "$EXEC"
+}
+
+function yarn-rm() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        start )
+            EXEC="sudo -u $YARN_USER /usr/hdp/current/hadoop-yarn-resourcemanager/sbin/yarn-daemon.sh --config $HADOOP_CONF_DIR start resourcemanager"
+            ;;
+        stop )
+            EXEC="sudo -u $YARN_USER /usr/hdp/current/hadoop-yarn-resourcemanager/sbin/yarn-daemon.sh --config $HADOOP_CONF_DIR stop resourcemanager"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "$EXEC"
+}
+
+function yarn-nm() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        start )
+            EXEC="sudo -u $YARN_USER /usr/hdp/current/hadoop-yarn-nodemanager/sbin/yarn-daemon.sh --config $HADOOP_CONF_DIR start nodemanager"
+            ;;
+        stop )
+            EXEC="sudo -u $YARN_USER /usr/hdp/current/hadoop-yarn-nodemanager/sbin/yarn-daemon.sh --config $HADOOP_CONF_DIR stop nodemanager"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/slaves "$EXEC"
+}
+
+function hive-server() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        start )
+            EXEC="sudo -u $HIVE_USER /usr/lib/hive/bin/hiveserver2 -hiveconf hive.log.file=hiveserver2.log >$HIVE_LOG_DIR/hiveserver2.out 2>$HIVE_LOG_DIR/hiveserver2.log &"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "$EXEC"
+    echo "Started Hiveserver2 on `cat $DEMO_HOME/conf/cluster/masters`"
+}
+
+function zookeeper() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        start )
+              EXEC="sudo su - $ZOOKEEPER_USER -c 'source /etc/zookeeper/conf/zookeeper-env.sh ; export ZOOCFGDIR=/etc/zookeeper/conf;/usr/lib/zookeeper/bin/zkServer.sh start >> /var/log/zookeeper/zoo.out 2>&1'"
+            ;;
+        stop )
+              EXEC="sudo su - $ZOOKEEPER_USER -c 'source /etc/zookeeper/conf/zookeeper-env.sh ; export ZOOCFGDIR=/etc/zookeeper/conf;/usr/lib/zookeeper/bin/zkServer.sh stop >> /var/log/zookeeper/zoo.out 2>&1'"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "$EXEC"
+    echo "$SUBCMD Zookeeper on `cat $DEMO_HOME/conf/cluster/masters`"
+}
+
+function storm-master() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        start )
+              EXEC="sudo supervisorctl start all"
+            ;;
+        stop )
+              EXEC="sudo supervisorctl stop all"
+            ;;
+        status )
+              EXEC="sudo supervisorctl status"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "$EXEC"
+    echo "$SUBCMD Storm master on `cat $DEMO_HOME/conf/cluster/masters`"
+}
+
+function storm-worker() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        start )
+              EXEC="sudo supervisorctl start all"
+            ;;
+        stop )
+              EXEC="sudo supervisorctl stop all"
+            ;;
+        status )
+              EXEC="sudo supervisorctl status"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/slaves "$EXEC"
+    echo "$SUBCMD Storm worker on `cat $DEMO_HOME/conf/cluster/slaves`"
+}
+
+function tweets() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        copy )
+            EXEC="sudo -u $HIVE_USER hdfs dfs -copyFromLocal $DEMO_HOME/data/twitter_data.txt /user/hive"
+            ;;
+        create )
+            EXEC="sudo -u $HIVE_USER hive --hiveconf hive.exec.scratchdir=/tmp/scratch -f $DEMO_HOME/hql/create_tweets_table.hql"
+            ;;
+        load )
+            EXEC="sudo -u $HIVE_USER hive --hiveconf hive.exec.scratchdir=/tmp/scratch -f $DEMO_HOME/hql/load_tweets.hql"
+            ;;
+        query )
+            EXEC="sudo -u $HIVE_USER hive --hiveconf hive.exec.scratchdir=/tmp/scratch -f $DEMO_HOME/hql/query_tweets.hql"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "$EXEC"
+}
+
+function hellostorm() {
+    if [[ "x$SUBCMD" == "x" ]]; then
+        usage_exit
+    fi
+
+    case $SUBCMD in
+        package )
+            EXEC="$DEMO_HOME/hellostorm.sh package"
+            ;;
+        run )
+            EXEC="$DEMO_HOME/hellostorm.sh run"
+            ;;
+        * )
+            usage_exit
+            ;;
+    esac
+
+    pdsh -l $PDSH_SUDO_USER -R ssh -w ^$DEMO_HOME/conf/cluster/masters "$EXEC"
+}
+
+# main routine
+case $CMD in
+    check-reachability )
+        check-reachability
+        ;;
+    pre-setup )
+        pre-setup
+        ;;
+    start-master-instances )
+        start-master-instances
+        ;;
+    start-slave-instances )
+        start-slave-instances
+        ;;
+    start-metastore )
+        start-metastore
+        ;;
+    start-client )
+        start-client
+        ;;
+    setup-masters )
+        setup-masters
+        ;;
+    setup-slaves )
+        setup-slaves
+        ;;
+    setup-metastore )
+        setup-metastore
+        ;;
+    setup-client )
+        setup-client
+        ;;
+    setup-yarn )
+        setup-yarn
+        ;;
+    setup-jobhistory )
+        setup-jobhistory
+        ;;
+    setup-hive )
+        setup-hive
+        ;;
+    setup-tez )
+        setup-tez
+        ;;
+    setup-zookeeper )
+        setup-zookeeper
+        ;;
+    setup-storm-master )
+        setup-storm-master
+        ;;
+    setup-storm-worker )
+        setup-storm-worker
+        ;;
+    namenode )
+        namenode
+        ;;
+    datanode )
+        datanode
+        ;;
+    yarn-rm )
+        yarn-rm
+        ;;
+    yarn-nm )
+        yarn-nm
+        ;;
+    jobhistory )
+        jobhistory
+        ;;
+    hive-server )
+        hive-server
+        ;;
+    zookeeper )
+        zookeeper
+        ;;
+    storm-master )
+        storm-master
+        ;;
+    storm-worker )
+        storm-worker
+        ;;
+    tweets )
+        tweets
+        ;;
+    hellostorm )
+        hellostorm
+        ;;
+    * )
+        run_cmd_on_all_nodes
+        ;;
+esac

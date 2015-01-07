@@ -1,0 +1,12 @@
+---
+storm.zookeeper.servers:
+    - "TODO_ZOOKEEPER_SERVERS"
+
+nimbus.host: "TODO_NIMBUS_HOSTNAME"
+
+drpc.servers:
+    - "localhost"
+
+storm.local.dir: "TODO_STORM_LOCAL_DIR"
+
+logviewer.port: 8081
