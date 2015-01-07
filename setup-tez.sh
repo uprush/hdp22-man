@@ -11,12 +11,6 @@ function install_tez() {
   echo "Installing Tez"
   yum -y install tez
 
-  # create tez user
-  # useradd tez
-  # useradd -G hadoop tez
-  # mkdir /home/tez
-  # chown -R tez:tez /home/tez
-
   sudo -u $HDFS_USER hdfs dfs -mkdir -p /apps/tez
   sudo -u $HDFS_USER hdfs dfs -copyFromLocal /usr/hdp/current/tez-client/* /apps/tez
   sudo -u $HDFS_USER hdfs dfs -chown -R hdfs:users /apps/tez
@@ -24,7 +18,7 @@ function install_tez() {
   sudo -u $HDFS_USER hdfs dfs -chmod 755 /apps/tez
   sudo -u $HDFS_USER hdfs dfs -chmod 644 /apps/tez/*.tar
 
-  # Create tem dir (not required)
+  # Create tmp dir (not required)
   sudo -u $HDFS_USER hdfs dfs -mkdir /tmp
   sudo -u $HDFS_USER hdfs dfs -chmod 777 /tmp
 }
@@ -58,13 +52,8 @@ function upload_to_hdfs() {
   sudo -u $HDFS_USER hdfs dfs -chmod -R 444 /hdp/apps/$HDP_VERSION/tez/tez.tar.gz
 }
 
-function add_to_classpath() {
-  export HADOOP_CLASSPATH=$TEZ_CONF_DIR:$TEZ_JARS:$HADOOP_CLASSPATH
-}
-
 install_tez
 configure_tez
 upload_to_hdfs
-# add_to_classpath
 
 echo "Completed successfully: setup-tez"
