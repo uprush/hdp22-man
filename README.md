@@ -16,7 +16,7 @@ Demostrations
 # Prepare
 Check out the code, start the VMs
 
-    $ git clone
+    $ git clone https://github.com/uprush/hdp22-man.git
     $ cd hdp22-man
     $ ./hdemo -c start-client
     $ ./hdemo -c start-master-instances
