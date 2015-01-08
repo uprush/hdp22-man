@@ -4,6 +4,7 @@
 $script = <<SCRIPT
 sudo yum -y install ntp rsync
 sudo chkconfig ntpd on
+sudo /etc/init.d/ntpd start
 sudo chkconfig iptables off
 sudo /etc/init.d/iptables stop
 sudo setenforce 0
