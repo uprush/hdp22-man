@@ -11,13 +11,6 @@ function install_tez() {
   echo "Installing Tez"
   yum -y install tez
 
-  sudo -u $HDFS_USER hdfs dfs -mkdir -p /apps/tez
-  sudo -u $HDFS_USER hdfs dfs -copyFromLocal /usr/hdp/current/tez-client/* /apps/tez
-  sudo -u $HDFS_USER hdfs dfs -chown -R hdfs:users /apps/tez
-  sudo -u $HDFS_USER hdfs dfs -chmod 755 /apps
-  sudo -u $HDFS_USER hdfs dfs -chmod 755 /apps/tez
-  sudo -u $HDFS_USER hdfs dfs -chmod 644 /apps/tez/*.tar
-
   # Create tmp dir (not required)
   sudo -u $HDFS_USER hdfs dfs -mkdir /tmp
   sudo -u $HDFS_USER hdfs dfs -chmod 777 /tmp
